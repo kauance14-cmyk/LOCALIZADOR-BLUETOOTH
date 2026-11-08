@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#040a18">
+  <meta name="description" content="Smart Finder: descubra dispositivos Bluetooth Low Energy próximos e use a intensidade do sinal para se aproximar deles.">
+  <title>Smart Finder — Encontre seus dispositivos Bluetooth</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23040a18' stroke='%2300d4ff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%2300d4ff' stroke-opacity='.5'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2300d4ff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- data-phase: "idle" (antes da busca) | "active" (buscando/acompanhando) | "stopped" (busca parada) -->
+  <div class="app" id="app" data-phase="idle">
+
+    <!-- ========== Topo ========== -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6" opacity=".6"/><circle cx="12" cy="12" r="2"/></svg>
+        </span>
+        <span class="brand-name">Smart Finder</span>
+      </div>
+      <span class="chip chip-mode" id="modeChip">Verificando…</span>
+    </header>
+
+    <!-- ========== Chamada inicial ========== -->
+    <section class="hero">
+      <p class="eyebrow">Bluetooth Low Energy</p>
+      <h1>Encontre seus dispositivos Bluetooth.</h1>
+      <p class="subtitle">Descubra dispositivos próximos e encontre o caminho até eles.</p>
+    </section>
+
+    <!-- ========== Avisos (compatibilidade e erros) ========== -->
+    <div class="banner" id="compat" hidden>
+      <strong id="compatTitle"></strong>
+      <span id="compatText"></span>
+    </div>
+    <div class="banner" id="alert" role="alert" hidden>
+      <strong id="alertTitle"></strong>
+      <span id="alertText"></span>
+    </div>
+
+    <div class="layout">
+
+      <!-- ========== Coluna esquerda: radar ========== -->
+      <section class="card radar-card">
+        <div class="radar" id="radar" role="img" aria-label="Radar de busca Bluetooth">
+          <div class="ring r1"></div>
+          <div class="ring r2"></div>
+          <div class="ring r3"></div>
+          <div class="ring r4"></div>
+          <div class="cross"></div>
+          <div class="pulse"></div>
+          <div class="sweep"></div>
+          <div class="center-dot"></div>
+          <div class="blips" id="blips"></div>
+        </div>
+
+        <p class="radar-caption" id="radarCaption">Pronto para buscar.</p>
+
+        <div class="stats only-scan">
+          <div><span class="stat-num" id="statFound">0</span><span class="stat-lbl">encontrados</span></div>
+          <div><span class="stat-num" id="statTime">0:00</span><span class="stat-lbl">tempo</span></div>
+          <div><span class="stat-num stat-small" id="statMode">—</span><span class="stat-lbl">modo</span></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="startBtn" type="button">INICIAR BUSCA</button>
+          <button class="btn btn-ghost" id="stopBtn" type="button" hidden>Parar</button>
+          <button class="btn btn-ghost" id="againBtn" type="button" hidden>Procurar novamente</button>
+        </div>
+
+        <p class="radar-note">
+          Os anéis mostram a <b>proximidade relativa</b> pelo sinal (mais perto do centro = sinal mais forte).
+          A posição ao redor do radar é só ilustrativa: o Bluetooth <b>não informa direção</b> nem distância exata.
+        </p>
+      </section>
+
+      <!-- ========== Coluna direita ========== -->
+      <div class="col-right">
+
+        <!-- Painel de localização do dispositivo selecionado -->
+        <section class="card track" id="track" hidden>
+          <div class="track-head">
+            <div>
+              <p class="eyebrow">Localizando</p>
+              <h2 id="trName">—</h2>
+              <p class="muted" id="trId">—</p>
+            </div>
+            <button class="icon-btn" id="trClose" type="button" aria-label="Parar de acompanhar este dispositivo">✕</button>
+          </div>
+
+          <div class="track-body">
+            <div class="gauge" id="gauge" data-level="unknown">
+              <div class="gauge-inner">
+                <span class="gauge-num" id="trRssi">—</span>
+                <span class="gauge-unit">dBm</span>
+              </div>
+            </div>
+            <div class="track-side" data-level="unknown" id="trSide">
+              <span class="level-chip" id="trLevel">Indisponível</span>
+              <div class="bars" id="trBars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+              <span class="muted" id="trPercent">—</span>
+            </div>
+          </div>
+
+          <p class="guidance" id="trMsg" aria-live="polite">—</p>
+          <canvas id="trChart" aria-label="Histórico recente do sinal" role="img"></canvas>
+
+          <label class="switch">
+            <input type="checkbox" id="soundToggle">
+            <span class="switch-ui" aria-hidden="true"></span>
+            <span>Bipe e vibração de proximidade <small class="muted">(mais rápido = sinal mais forte)</small></span>
+          </label>
+
+          <h3 class="sub">Informações de conexão</h3>
+          <dl class="info">
+            <div><dt>Anúncio BLE</dt><dd id="iAdv">—</dd></div>
+            <div><dt>Conexão GATT</dt><dd id="iGatt">—</dd></div>
+            <div><dt>Permissão</dt><dd id="iAuth">—</dd></div>
+            <div><dt>TX Power</dt><dd id="iTx">—</dd></div>
+            <div><dt>Serviços anunciados</dt><dd id="iUuids">—</dd></div>
+            <div><dt>Fabricante</dt><dd id="iCompany">—</dd></div>
+            <div><dt>Origem do sinal</dt><dd id="iSource">—</dd></div>
+          </dl>
+          <div class="actions actions-left">
+            <button class="btn btn-ghost btn-sm" id="gattBtn" type="button">Testar conexão GATT</button>
+          </div>
+          <p class="muted pre" id="gattOut"></p>
+
+          <p class="disclaimer">
+            O RSSI é <b>apenas uma estimativa de proximidade</b>. Ele oscila com o corpo, paredes, a antena do aparelho e interferências,
+            então o app mostra tendência (aumentando / diminuindo) e não uma distância em metros.
+          </p>
+        </section>
+
+        <!-- Lista de dispositivos -->
+        <section class="card only-scan" id="listSection">
+          <div class="list-head">
+            <h2>Dispositivos encontrados</h2>
+            <label class="switch switch-sm">
+              <input type="checkbox" id="onlyNamed">
+              <span class="switch-ui" aria-hidden="true"></span>
+              <span>Só com nome</span>
+            </label>
+          </div>
+          <ul class="dev-list" id="deviceList"></ul>
+
+          <div class="empty" id="empty" hidden>
+            <p class="empty-title" id="emptyTitle"></p>
+            <p class="muted" id="emptyText"></p>
+            <ul class="reasons" id="emptyReasons" hidden>
+              <li>O dispositivo está <b>desligado, sem bateria</b> ou longe demais (o alcance típico é de poucos metros, menos com paredes no caminho).</li>
+              <li>Muitos smartwatches <b>só anunciam quando não estão conectados</b> a um celular. Tente desativar o Bluetooth do celular pareado ou colocar o relógio em modo de pareamento.</li>
+              <li>Alguns aparelhos usam endereço aleatório e <b>não divulgam o nome</b>. Desmarque “Só com nome”.</li>
+              <li>No Android, permita <b>Dispositivos por perto</b> (Android 12+) ou ative a <b>Localização</b> (Android 11 ou anterior).</li>
+              <li>O navegador pode não oferecer varredura contínua. Veja o aviso de compatibilidade acima.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Histórico da sessão -->
+        <section class="card" id="historySection" hidden>
+          <div class="list-head">
+            <h2>Vistos nesta sessão</h2>
+            <button class="btn btn-ghost btn-sm" id="historyClear" type="button">Limpar</button>
+          </div>
+          <ul class="dev-list dev-list-compact" id="historyList"></ul>
+          <p class="muted small">Guardado só nesta aba do navegador; some ao fechá-la.</p>
+        </section>
+
+        <!-- Limitações -->
+        <section class="card limits" id="limits">
+          <h2>Como funciona e limitações</h2>
+          <ul class="limit-list">
+            <li><b>Só acha o que está transmitindo.</b> O Smart Finder detecta anúncios Bluetooth Low Energy. Dispositivo desligado, sem bateria ou que não esteja anunciando <b>não pode ser localizado</b>.</li>
+            <li><b>RSSI não é distância.</b> É a força do sinal recebido (em dBm) e muda com obstáculos, corpo e interferência. Serve como pista de “mais perto / mais longe”.</li>
+            <li><b>Sem MAC e sem GPS.</b> O navegador mostra um identificador local opaco, não o endereço MAC, e o app não usa sua localização nem envia nada a servidores.</li>
+            <li><b>Smartwatches são difíceis.</b> Muitos param de anunciar quando conectados ao celular, usam endereço aleatório e escondem o nome.</li>
+            <li><b>Compatibilidade.</b> Web Bluetooth funciona no Chrome, Edge, Opera e Samsung Internet (Android e computador). Não funciona no Safari, no Firefox nem em navegadores comuns do iPhone/iPad.</li>
+            <li><b>Varredura contínua e RSSI em tempo real</b> dependem de recursos ainda experimentais do navegador. Quando faltam, o app usa o seletor nativo e informa o que não está disponível.</li>
+          </ul>
+        </section>
+
+      </div>
+    </div>
+
+    <footer class="foot">Smart Finder · tudo roda no seu navegador, nada é enviado para a internet.</footer>
+  </div>
+
+  <script src="signal.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
